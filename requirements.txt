@@ -1,0 +1,18 @@
+# Direct dependencies only; pip resolves the rest.
+# Install:  .venv/bin/pip install -r requirements.txt
+
+# Gmail API and OAuth
+google-api-python-client==2.198.0
+google-auth==2.56.3
+google-auth-oauthlib==1.4.0
+
+# Message parsing
+beautifulsoup4==4.15.0
+
+# Query translation and summarizing
+openai==2.53.0
+python-dotenv==1.2.2
+
+# Web UI (server.py); the frontend has its own web/package.json
+fastapi==0.141.1
+uvicorn[standard]==0.52.1
