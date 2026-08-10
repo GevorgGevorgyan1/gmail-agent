@@ -11,8 +11,9 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+import agent
+import sessions
 from auth import get_service
-from digest import digest
 
 DIST = Path(__file__).parent / "web" / "dist"
 
@@ -21,6 +22,8 @@ app = FastAPI(title="Gmail Assistant")
 
 class Ask(BaseModel):
     request: str = Field(min_length=1, max_length=500)
+    # The browser mints this; the server only ever uses it as a dictionary key.
+    session_id: str = Field(min_length=1, max_length=64)
 
 
 @app.post("/api/ask")
@@ -31,14 +34,28 @@ def ask(body: Ask) -> dict:
     the model, and FastAPI gives sync handlers a worker thread instead of letting
     them stall the event loop for everyone else.
     """
+    request = body.request.strip()
+
     try:
-        result = digest(body.request.strip())
+        history = sessions.history(body.session_id)
+        result = agent.ask(request, history=history)
     except Exception as error:
         raise HTTPException(status_code=502, detail=str(error)) from error
 
+    # The model may search more than once, so what it searched is now a list.
+    query = " · ".join(search["query"] for search in result["searches"]) or "no search"
+    sessions.remember(body.session_id, request, query, result["text"])
+
     # Markdown and nothing else: the links live inside the prose now, so there is
     # no second payload of card data for the UI to lay out.
-    return {"query": result["query"], "count": result["count"], "text": result["text"]}
+    return {"query": query, "count": result["count"], "text": result["text"]}
+
+
+@app.delete("/api/session/{session_id}")
+def clear(session_id: str) -> dict:
+    """Drop a conversation's history so the next question starts cold."""
+    sessions.forget(session_id)
+    return {"cleared": True}
 
 
 @app.get("/api/account")

@@ -9,12 +9,16 @@ async function get(path, options) {
   return response.json();
 }
 
-export function ask(request) {
+export function ask(request, sessionId) {
   return get("/api/ask", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ request }),
+    body: JSON.stringify({ request, session_id: sessionId }),
   });
+}
+
+export function clearSession(sessionId) {
+  return get(`/api/session/${sessionId}`, { method: "DELETE" });
 }
 
 export function account() {

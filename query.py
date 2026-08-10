@@ -86,9 +86,25 @@ def get_today() -> dict:
     }
 
 
-def to_query(text: str) -> str:
-    """Ask the model for a query, serving any tool calls it makes along the way."""
-    conversation = [{"role": "user", "content": text}]
+def to_query(text: str, history: list[dict] | None = None) -> str:
+    """Ask the model for a query, serving any tool calls it makes along the way.
+
+    Earlier turns come along so that "what about last week instead" reads as a
+    change to the previous search, not as a search for the word "instead".
+    """
+    conversation = []
+
+    if history:
+        earlier = "\n".join(f"{turn['request']} -> {turn['query']}" for turn in history[-3:])
+        conversation.append({
+            "role": "user",
+            "content": (
+                f"Earlier in this conversation:\n{earlier}\n\n"
+                "Use these only to resolve references in the request that follows."
+            ),
+        })
+
+    conversation.append({"role": "user", "content": text})
 
     for _ in range(4):
         response = client.responses.create(

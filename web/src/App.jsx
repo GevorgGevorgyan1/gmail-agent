@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 
-import { account, ask } from "./api";
+import { account, ask, clearSession } from "./api";
 
 const SUGGESTIONS = [
   "Summarize my important emails today",
@@ -469,6 +469,8 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef(null);
   const streamTimer = useRef(null);
+  // Names this conversation for the server, which keeps the history behind it.
+  const sessionId = useRef(crypto.randomUUID());
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -529,7 +531,7 @@ export default function App() {
       setBusy(true);
 
       try {
-        const answer = await ask(trimmed);
+        const answer = await ask(trimmed, sessionId.current);
         streamAssistantMessage(assistantId, answer);
       } catch (error) {
         setMessages((prev) =>
@@ -545,6 +547,10 @@ export default function App() {
 
   const clearConversation = () => {
     clearInterval(streamTimer.current);
+    // Drop the server's copy too, then start a fresh conversation either way —
+    // a failed cleanup should not leave the user staring at a stale transcript.
+    clearSession(sessionId.current).catch(() => {});
+    sessionId.current = crypto.randomUUID();
     setMessages([]);
     setBusy(false);
     setInput("");
