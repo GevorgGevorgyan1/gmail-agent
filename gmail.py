@@ -69,6 +69,15 @@ def fetch(query: str = DEFAULT_QUERY, limit: int = 50) -> list[dict]:
     return parsed
 
 
+def fetch_thread(thread_id: str) -> list[dict]:
+    """Every message in one conversation, oldest first — both sides of it."""
+    thread = get_service().users().threads().get(
+        userId="me", id=thread_id, format="full"
+    ).execute()
+
+    return [parse_message(message) for message in thread.get("messages", [])]
+
+
 def main():
     query = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_QUERY
     limit = int(sys.argv[2]) if len(sys.argv) > 2 else 50

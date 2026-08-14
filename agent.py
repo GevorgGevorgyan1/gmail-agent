@@ -7,12 +7,13 @@ import json
 import sys
 
 from digest import PER_MESSAGE, THREAD_URL, _when
-from gmail import fetch
+from gmail import fetch, fetch_thread
 from query import get_today, normalize
 from summarize import MODEL, client
 
-MAX_ROUNDS = 6      # tool rounds before we stop and take whatever prose we have
-SEARCH_LIMIT = 25   # emails per search; every one of them lands in the context
+MAX_ROUNDS = 6         # tool rounds before we stop and take whatever prose we have
+SEARCH_LIMIT = 25      # emails per search; every one of them lands in the context
+THREAD_BUDGET = 8000   # chars of body per thread, newest messages served first
 
 TOOLS = [
     {
@@ -42,6 +43,28 @@ TOOLS = [
     },
     {
         "type": "function",
+        "name": "read_thread",
+        "description": (
+            "Read a whole conversation: every message in it, oldest first, both the "
+            "ones this person sent and the ones they received, with fuller text than "
+            "search returns. Use it when the question is about what was actually said "
+            "or whether someone replied — not to confirm an email exists."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "thread_id": {
+                    "type": "string",
+                    "description": "The thread_id from a search result.",
+                },
+            },
+            "required": ["thread_id"],
+            "additionalProperties": False,
+        },
+        "strict": True,
+    },
+    {
+        "type": "function",
         "name": "get_today",
         "description": (
             "Today's date, weekday and timezone. Call before writing an after:/before: "
@@ -64,6 +87,11 @@ Judge what came back:
   the conversation. Do not search again to confirm an emptiness you can explain.
 - Something found — answer from it.
 Three searches is plenty. Never claim an email exists that no search returned.
+
+Search finds emails; read_thread explains them. Reach for it when the question is
+about what was said, what was agreed, or whether anyone replied — and leave it
+alone when the question is only which emails exist, since a thread costs far more
+context than a search result.
 
 When you have emails to report, open with one plain sentence naming what you found
 and the range it covers — "I found the following emails sent by you between June
@@ -128,6 +156,43 @@ def search_emails(query: str, limit: int = SEARCH_LIMIT) -> dict:
     }
 
 
+def read_thread(thread_id: str) -> dict:
+    try:
+        messages = fetch_thread(thread_id)
+    except Exception as error:
+        return {"error": f"could not read thread {thread_id}: {error}"}
+
+    if not messages:
+        return {"thread_id": thread_id, "count": 0, "messages": []}
+
+    # Spend the budget newest-first: the tail of a conversation is what a question
+    # about it usually means, and the opening message is the most expendable.
+    remaining = THREAD_BUDGET
+    bodies = {}
+    for message in reversed(messages):
+        bodies[message["id"]] = message["body"][:remaining]
+        remaining -= len(bodies[message["id"]])
+
+    return {
+        "thread_id": thread_id,
+        "count": len(messages),
+        "link": THREAD_URL.format(thread_id=thread_id),
+        "messages": [
+            {
+                "from": m["from"],
+                "to": m["to"],
+                "direction": "sent by this person" if m["direction"] == "sent" else "received",
+                "date": _when(m["date"]),
+                "subject": m["subject"] or "(no subject)",
+                "attachments": [a["filename"] for a in m["attachments"]],
+                "body": bodies[m["id"]],
+                "truncated": len(bodies[m["id"]]) < len(m["body"]),
+            }
+            for m in messages
+        ],
+    }
+
+
 def _replay(history: list[dict]) -> list[dict]:
     """Earlier turns as plain conversation — what was asked, what was answered."""
     turns = []
@@ -165,6 +230,8 @@ def ask(request: str, history: list[dict] | None = None) -> dict:
                 result = search_emails(arguments.get("query", ""), arguments.get("limit", SEARCH_LIMIT))
                 if "error" not in result:
                     searches.append({"query": result["query"], "count": result["count"]})
+            elif call.name == "read_thread":
+                result = read_thread(arguments.get("thread_id", ""))
             else:
                 result = get_today()
 
