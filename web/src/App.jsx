@@ -3,31 +3,45 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { account, ask, clearSession } from "./api";
 
 const SUGGESTIONS = [
-  "Summarize my important emails today",
-  "Which emails need a reply?",
-  "What emails did I write last month?",
-  "Anything from recruiters this week?",
+  "did I ever write to arman",
+  "unread from this week",
+  "what did stripe charge me last month",
+  "who is waiting on a reply from me",
+];
+
+const FEATURES = [
+  {
+    label: "Smart search",
+    body: "The agent runs Gmail searches for you, refining its query until it finds the right messages.",
+  },
+  {
+    label: "Cited answers",
+    body: "Every answer links straight to the threads it came from, one click away in Gmail.",
+  },
+  {
+    label: "Read-only by design",
+    body: "A restricted scope means nothing can be sent, deleted, or modified — ever.",
+  },
 ];
 
 /* ---------------------------------------------------------------
    Icons
 --------------------------------------------------------------- */
 
-function LogoIcon({ className }) {
+function PromptMark({ className }) {
   return (
-    <div className={className}>
-      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
-        <rect x="1" y="1" width="22" height="22" rx="6" fill="#D93025" />
-        <path
-          d="M6 8.5L12 13L18 8.5"
-          stroke="white"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <rect x="6" y="7" width="12" height="10" rx="1.6" stroke="white" strokeWidth="1.6" />
-      </svg>
+    <div className={`flex items-center justify-center rounded-md bg-ink text-paper ${className}`}>
+      <span className="font-mono text-[11px] font-medium leading-none tracking-tighter">&gt;_</span>
     </div>
+  );
+}
+
+function LockIcon({ className }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} xmlns="http://www.w3.org/2000/svg">
+      <rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M8 11V8a4 4 0 018 0v3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
   );
 }
 
@@ -46,13 +60,13 @@ function SettingsIcon({ className }) {
   );
 }
 
-function SendIcon({ className }) {
+function ArrowUpIcon({ className }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} xmlns="http://www.w3.org/2000/svg">
       <path
-        d="M12 19V5M12 5L6 11M12 5L18 11"
+        d="M12 19V6M12 6L6.5 11.5M12 6l5.5 5.5"
         stroke="currentColor"
-        strokeWidth="2"
+        strokeWidth="1.9"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
@@ -69,17 +83,6 @@ function CopyIcon({ className }) {
   );
 }
 
-function SparkAvatar() {
-  return (
-    <div className="w-7 h-7 rounded-full bg-red-50 flex items-center justify-center shrink-0 border border-red-100">
-      <svg viewBox="0 0 24 24" fill="none" className="w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg">
-        <rect x="3" y="5" width="18" height="14" rx="2.5" stroke="#D93025" strokeWidth="1.8" />
-        <path d="M4.5 7L12 12.5L19.5 7" stroke="#D93025" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    </div>
-  );
-}
-
 /* ---------------------------------------------------------------
    Markdown rendering (lightweight, local)
 --------------------------------------------------------------- */
@@ -92,7 +95,7 @@ const INLINE = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]*\]\([^)\s]+\))/g;
 // clicked. A prompt asking the model to behave is not a guarantee that it did.
 const GMAIL = "https://mail.google.com/";
 
-function parseInline(text, keyBase) {
+function parseInline(text, keyBase, strongClass = "font-medium text-ink") {
   const nodes = [];
   let lastIndex = 0;
   let match;
@@ -105,13 +108,16 @@ function parseInline(text, keyBase) {
 
     if (token.startsWith("**")) {
       nodes.push(
-        <strong key={`${keyBase}-b-${key++}`} className="font-semibold text-gray-900">
+        <strong key={`${keyBase}-b-${key++}`} className={strongClass}>
           {token.slice(2, -2)}
         </strong>
       );
     } else if (token.startsWith("`")) {
       nodes.push(
-        <code key={`${keyBase}-c-${key++}`} className="px-1 py-0.5 bg-gray-100 rounded text-xs font-mono text-gray-800">
+        <code
+          key={`${keyBase}-c-${key++}`}
+          className="rounded bg-rule-soft px-1.5 py-0.5 font-mono text-[12.5px] text-ink"
+        >
           {token.slice(1, -1)}
         </code>
       );
@@ -126,7 +132,7 @@ function parseInline(text, keyBase) {
             href={href}
             target="_blank"
             rel="noreferrer"
-            className="font-medium text-red-700 underline decoration-red-200 underline-offset-2 hover:decoration-red-500 transition-colors"
+            className="font-medium text-ink underline decoration-rule decoration-1 underline-offset-[3px] transition-colors hover:decoration-ink-faint"
           >
             {label}
           </a>
@@ -155,10 +161,16 @@ function renderItems(items, keyBase, depth = 0) {
     while (i + 1 < items.length && items[i + 1].depth > item.depth) children.push(items[++i]);
 
     nodes.push(
-      <li key={`${keyBase}-${i}`} className="text-gray-700 leading-relaxed">
-        {parseInline(item.text, `${keyBase}-${i}`)}
+      <li key={`${keyBase}-${i}`} className="leading-relaxed text-ink-soft">
+        {/* A top-level bullet heads an email — its bold date is set in the same
+            serif as the page's title, so the eye can find the dates by shape. */}
+        {parseInline(
+          item.text,
+          `${keyBase}-${i}`,
+          depth === 0 ? "font-serif text-[19px] font-normal text-ink" : "font-medium text-ink"
+        )}
         {children.length > 0 && (
-          <ul className="list-[circle] pl-5 mt-1 space-y-0.5">
+          <ul className="mt-1.5 list-[circle] space-y-1 pl-5 marker:text-rule">
             {renderItems(children, `${keyBase}-${i}-c`, depth + 1)}
           </ul>
         )}
@@ -177,7 +189,7 @@ export function renderMarkdown(text) {
   const flushList = () => {
     if (!items.length) return;
     blocks.push(
-      <ul key={`ul-${blocks.length}`} className="list-disc pl-5 space-y-2 my-2">
+      <ul key={`ul-${blocks.length}`} className="my-3 list-disc space-y-3 pl-5 marker:text-ink-faint">
         {renderItems(items, `ul-${blocks.length}`)}
       </ul>
     );
@@ -200,13 +212,16 @@ export function renderMarkdown(text) {
     flushList();
     if (line.startsWith("### ")) {
       blocks.push(
-        <h3 key={`h-${blocks.length}`} className="text-sm font-semibold text-gray-900 mt-4 mb-1 tracking-wide uppercase">
-          {parseInline(line.slice(4), `h-${blocks.length}`)}
+        <h3
+          key={`h-${blocks.length}`}
+          className="mt-6 mb-2 font-mono text-[11px] uppercase tracking-[0.14em] text-ink-faint"
+        >
+          {parseInline(line.slice(4), `h-${blocks.length}`, "font-medium text-ink-soft")}
         </h3>
       );
     } else {
       blocks.push(
-        <p key={`p-${blocks.length}`} className="text-gray-700 leading-relaxed my-1.5">
+        <p key={`p-${blocks.length}`} className="my-2 leading-relaxed text-ink-soft">
           {parseInline(line, `p-${blocks.length}`)}
         </p>
       );
@@ -223,24 +238,23 @@ export function renderMarkdown(text) {
 
 function ThinkingDots() {
   return (
-    <div className="flex items-center gap-1 py-2">
-      <span className="dot w-1.5 h-1.5 rounded-full bg-gray-300" style={{ animationDelay: "0ms" }} />
-      <span className="dot w-1.5 h-1.5 rounded-full bg-gray-300" style={{ animationDelay: "150ms" }} />
-      <span className="dot w-1.5 h-1.5 rounded-full bg-gray-300" style={{ animationDelay: "300ms" }} />
+    <div className="flex items-center gap-1.5 py-1">
+      <span className="dot h-1.5 w-1.5 rounded-full bg-ink-faint" style={{ animationDelay: "0ms" }} />
+      <span className="dot h-1.5 w-1.5 rounded-full bg-ink-faint" style={{ animationDelay: "150ms" }} />
+      <span className="dot h-1.5 w-1.5 rounded-full bg-ink-faint" style={{ animationDelay: "300ms" }} />
     </div>
   );
 }
 
 /* ---------------------------------------------------------------
-   Message bubble
+   Turns
 --------------------------------------------------------------- */
 
 function UserMessage({ text }) {
   return (
-    <div className="flex justify-end">
-      <div className="max-w-[75%] bg-gray-100 text-gray-900 rounded-2xl rounded-tr-md px-4 py-2.5 text-sm leading-relaxed">
-        {text}
-      </div>
+    <div className="flex items-baseline gap-3 border-t border-rule-soft pt-9 first:border-0 first:pt-0">
+      <span className="select-none font-mono text-sm text-ink-faint">&gt;</span>
+      <p className="text-[17px] font-medium leading-snug text-ink">{text}</p>
     </div>
   );
 }
@@ -259,71 +273,146 @@ function AssistantMessage({ message }) {
 
   if (message.error) {
     return (
-      <div className="flex gap-3 items-start">
-        <SparkAvatar />
-        <div className="min-w-0 flex-1">
-          <p className="text-[15px] text-gray-700 leading-relaxed">
-            Something went wrong reaching your inbox.
-          </p>
-          <p className="mt-1 text-xs text-red-600 font-mono break-words">{message.error}</p>
-        </div>
+      <div className="pl-7">
+        <p className="text-[15px] leading-relaxed text-ink-soft">
+          Something went wrong reaching your inbox.
+        </p>
+        <p className="mt-1.5 break-words font-mono text-xs text-[#a4483c]">{message.error}</p>
       </div>
     );
   }
 
   return (
-    <div className="flex gap-3 items-start">
-      <SparkAvatar />
-      <div className="min-w-0 flex-1 group">
-        {message.thinking ? (
-          <ThinkingDots />
-        ) : (
-          <>
-            <div className="text-[15px]">{renderMarkdown(message.content)}</div>
-            {message.streaming && <span className="stream-cursor" />}
-            {settled && message.query && (
-              <p className="mt-2 text-xs text-gray-400">
-                Searched <code className="font-mono text-gray-500">{message.query}</code> · {message.count}{" "}
-                {message.count === 1 ? "email" : "emails"} read
-              </p>
-            )}
-            {settled && (
-              <button
-                onClick={handleCopy}
-                className="mt-2 inline-flex items-center gap-1.5 text-xs text-gray-400 opacity-0 group-hover:opacity-100 hover:text-gray-600 transition-opacity"
-              >
-                <CopyIcon className="w-3.5 h-3.5" />
-                {copied ? "Copied" : "Copy"}
-              </button>
-            )}
-          </>
-        )}
-      </div>
+    <div className="group pl-7 text-[15px]">
+      {message.thinking ? (
+        <ThinkingDots />
+      ) : (
+        <>
+          <div>{renderMarkdown(message.content)}</div>
+          {message.streaming && <span className="stream-cursor" />}
+          {settled && message.query && (
+            <p className="mt-5 font-mono text-[11px] leading-relaxed text-ink-faint">
+              searched <span className="text-ink-soft">{message.query}</span> · {message.count}{" "}
+              {message.count === 1 ? "email" : "emails"} read
+            </p>
+          )}
+          {settled && (
+            <button
+              onClick={handleCopy}
+              className="mt-2 inline-flex items-center gap-1.5 font-mono text-[11px] text-ink-faint opacity-0 transition-opacity hover:text-ink-soft group-hover:opacity-100"
+            >
+              <CopyIcon className="h-3.5 w-3.5" />
+              {copied ? "copied" : "copy"}
+            </button>
+          )}
+        </>
+      )}
     </div>
   );
 }
 
 /* ---------------------------------------------------------------
-   Empty state
+   Ask box
 --------------------------------------------------------------- */
 
-function EmptyState({ onPick }) {
+function AskBox({ value, onChange, onSend, disabled, placeholder, autoFocus }) {
+  const taRef = useRef(null);
+
+  useEffect(() => {
+    const ta = taRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = Math.min(ta.scrollHeight, 160) + "px";
+  }, [value]);
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      onSend();
+    }
+  };
+
+  const ready = value.trim() && !disabled;
+
   return (
-    <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
-      <div className="w-12 h-12 mb-5">
-        <LogoIcon className="w-12 h-12" />
+    <div className="flex items-end gap-2 rounded-[26px] border border-rule bg-paper-raised py-2 pl-5 pr-2 transition-colors focus-within:border-ink-faint">
+      <textarea
+        ref={taRef}
+        rows={1}
+        value={value}
+        autoFocus={autoFocus}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        className="max-h-40 flex-1 resize-none bg-transparent py-2 text-[15px] leading-relaxed text-ink outline-none placeholder:text-ink-faint"
+      />
+      <button
+        onClick={onSend}
+        disabled={!ready}
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors ${
+          ready
+            ? "bg-ink text-paper hover:bg-ink-soft"
+            : "border border-rule text-ink-faint"
+        }`}
+        aria-label="Send message"
+      >
+        <ArrowUpIcon className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------
+   Landing
+--------------------------------------------------------------- */
+
+function Landing({ input, setInput, onSend, onPick, busy }) {
+  return (
+    <div className="mx-auto w-full max-w-3xl px-6 pb-24 pt-14 sm:pt-20">
+      <h1 className="font-serif text-[3.25rem] leading-[1.06] tracking-[-0.015em] text-ink sm:text-[4rem]">
+        Ask your inbox
+        <br />
+        in plain language.
+      </h1>
+
+      <p className="mt-8 max-w-xl text-[15px] leading-[1.75] text-ink-soft">
+        Gmail Agent reads your inbox and answers in plain language. Ask about any conversation,
+        contact, or date range and get a clear summary — with direct links to the original
+        threads, so you always land on the real message. Read-only by design, so your mail stays
+        exactly as you left it.
+      </p>
+
+      <div className="mt-10">
+        <AskBox
+          value={input}
+          onChange={setInput}
+          onSend={onSend}
+          disabled={busy}
+          autoFocus
+          placeholder="Ask your inbox — e.g. did I ever write to arman"
+        />
       </div>
-      <h1 className="text-2xl font-medium text-gray-900 mb-1">What would you like to know about your Gmail?</h1>
-      <p className="text-sm text-gray-400 mb-8">Ask in plain language — I'll search your inbox and bring back the answer.</p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-xl">
+
+      <div className="mt-5 flex flex-wrap gap-2.5">
         {SUGGESTIONS.map((s) => (
           <button
             key={s}
             onClick={() => onPick(s)}
-            className="text-left text-sm text-gray-600 bg-white border border-gray-200 rounded-xl px-4 py-3 hover:border-red-200 hover:bg-red-50/40 hover:text-gray-900 transition-colors"
+            className="rounded-full border border-rule bg-paper-raised px-4 py-1.5 font-mono text-xs text-ink-soft transition-colors hover:border-ink-faint hover:text-ink"
           >
             {s}
           </button>
+        ))}
+      </div>
+
+      <div className="mt-16 grid gap-4 sm:grid-cols-3">
+        {FEATURES.map((feature) => (
+          <div key={feature.label} className="rounded-xl border border-rule bg-paper-raised p-5">
+            <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-faint">
+              {feature.label}
+            </p>
+            <p className="mt-3 text-sm leading-relaxed text-ink-soft">{feature.body}</p>
+          </div>
         ))}
       </div>
     </div>
@@ -354,102 +443,66 @@ function TopBar({ onClear }) {
   }, []);
 
   return (
-    <header className="h-14 shrink-0 border-b border-gray-100 flex items-center justify-between px-4 sm:px-6 bg-white/95 z-10">
-      <div className="flex items-center gap-2.5">
-        <LogoIcon className="w-6 h-6" />
-        <span className="text-[15px] font-medium text-gray-900">Gmail Assistant</span>
-      </div>
-      <div className="relative" ref={ref}>
-        <button
-          onClick={() => setOpen((v) => !v)}
-          className="p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
-          aria-label="Settings"
-        >
-          <SettingsIcon className="w-[18px] h-[18px]" />
-        </button>
-        {open && (
-          <div className="absolute right-0 mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-lg py-1.5 pop-in">
-            <div className="px-3.5 py-2.5 border-b border-gray-100">
-              <p className="text-xs text-gray-400 mb-1">Connected account</p>
-              <div className="flex items-center gap-2">
-                <span
-                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                    mailbox?.email ? "bg-green-500" : mailbox?.error ? "bg-red-500" : "bg-gray-300"
-                  }`}
-                />
-                <span className="text-sm text-gray-800 truncate">
-                  {mailbox?.email || (mailbox?.error ? "Not connected" : "Checking…")}
-                </span>
-              </div>
-            </div>
+    <header className="z-10 shrink-0 border-b border-rule-soft">
+      <div className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between px-6">
+        <div className="flex items-center gap-3">
+          <PromptMark className="h-7 w-7" />
+          <span className="font-mono text-sm font-medium tracking-tight text-ink">gmail-agent</span>
+          <span className="hidden rounded border border-rule px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-faint sm:inline">
+            In development
+          </span>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <span className="hidden items-center gap-1.5 font-mono text-xs text-ink-soft sm:flex">
+            <LockIcon className="h-3.5 w-3.5" />
+            gmail.readonly
+          </span>
+
+          <div className="relative" ref={ref}>
             <button
-              onClick={() => {
-                onClear();
-                setOpen(false);
-              }}
-              className="w-full text-left px-3.5 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+              onClick={() => setOpen((v) => !v)}
+              className="rounded-full p-1.5 text-ink-faint transition-colors hover:bg-rule-soft hover:text-ink-soft"
+              aria-label="Settings"
             >
-              Clear conversation
+              <SettingsIcon className="h-[17px] w-[17px]" />
             </button>
+            {open && (
+              <div className="pop-in absolute right-0 mt-2 w-64 rounded-xl border border-rule bg-paper-raised py-1.5 shadow-[0_8px_24px_-12px_rgba(44,61,68,0.25)]">
+                <div className="border-b border-rule-soft px-4 py-3">
+                  <p className="mb-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-ink-faint">
+                    Connected account
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                        mailbox?.email
+                          ? "bg-emerald-600"
+                          : mailbox?.error
+                            ? "bg-[#a4483c]"
+                            : "bg-rule"
+                      }`}
+                    />
+                    <span className="truncate font-mono text-xs text-ink">
+                      {mailbox?.email || (mailbox?.error ? "not connected" : "checking…")}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    onClear();
+                    setOpen(false);
+                  }}
+                  className="w-full px-4 py-2.5 text-left text-sm text-ink-soft transition-colors hover:bg-rule-soft/60 hover:text-ink"
+                >
+                  Clear conversation
+                </button>
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </header>
-  );
-}
-
-/* ---------------------------------------------------------------
-   Input bar
---------------------------------------------------------------- */
-
-function InputBar({ value, onChange, onSend, disabled }) {
-  const taRef = useRef(null);
-
-  useEffect(() => {
-    const ta = taRef.current;
-    if (!ta) return;
-    ta.style.height = "auto";
-    ta.style.height = Math.min(ta.scrollHeight, 160) + "px";
-  }, [value]);
-
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      onSend();
-    }
-  };
-
-  return (
-    <div className="shrink-0 border-t border-gray-100 bg-white px-4 sm:px-6 py-4">
-      <div className="max-w-2xl mx-auto">
-        <div className="flex items-end gap-2 bg-white border border-gray-200 rounded-2xl px-3.5 py-2.5 focus-within:border-red-300 transition-colors">
-          <textarea
-            ref={taRef}
-            rows={1}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Ask about your Gmail…"
-            className="flex-1 resize-none bg-transparent text-sm text-gray-900 placeholder-gray-400 outline-none py-1.5 max-h-40 leading-relaxed"
-          />
-          <button
-            onClick={onSend}
-            disabled={disabled || !value.trim()}
-            className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
-              value.trim() && !disabled
-                ? "bg-red-600 text-white hover:bg-red-700"
-                : "bg-gray-100 text-gray-300"
-            }`}
-            aria-label="Send message"
-          >
-            <SendIcon className="w-4 h-4" />
-          </button>
-        </div>
-        <p className="text-center text-xs text-gray-300 mt-2">
-          Gmail Assistant reads your inbox to answer questions. Enter to send · Shift+Enter for a new line
-        </p>
-      </div>
-    </div>
   );
 }
 
@@ -556,26 +609,17 @@ export default function App() {
     setInput("");
   };
 
+  const started = messages.length > 0;
+
   return (
-    <div className="h-full w-full flex flex-col bg-white" style={{ fontFamily: "'Google Sans Text','Inter',-apple-system,BlinkMacSystemFont,sans-serif" }}>
-      <style>{`
-        @keyframes popIn { from { opacity: 0; transform: translateY(-4px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
-        @keyframes bounceDot { 0%, 60%, 100% { transform: translateY(0); opacity: .4 } 30% { transform: translateY(-3px); opacity: 1 } }
-        @keyframes blink { 0%, 50% { opacity: 1 } 51%, 100% { opacity: 0 } }
-        .pop-in { animation: popIn 0.15s ease both; }
-        .dot { animation: bounceDot 1.2s infinite ease-in-out; }
-        .stream-cursor { display: inline-block; width: 2px; height: 14px; background: #D93025; margin-left: 2px; vertical-align: -2px; animation: blink 1s step-start infinite; }
-        textarea::-webkit-scrollbar, .msg-scroll::-webkit-scrollbar { width: 6px; }
-        .msg-scroll::-webkit-scrollbar-thumb { background: #E8EAED; border-radius: 999px; }
-      `}</style>
+    <div className="relative flex h-full w-full flex-col overflow-hidden bg-paper">
+      <div className="grid-fade pointer-events-none absolute inset-x-0 top-0 h-64" />
 
       <TopBar onClear={clearConversation} />
 
-      {messages.length === 0 ? (
-        <EmptyState onPick={send} />
-      ) : (
-        <div ref={scrollRef} className="msg-scroll flex-1 overflow-y-auto px-4 sm:px-6">
-          <div className="max-w-2xl mx-auto py-6 space-y-5">
+      <div ref={scrollRef} className="msg-scroll relative flex-1 overflow-y-auto">
+        {started ? (
+          <div className="mx-auto w-full max-w-3xl space-y-5 px-6 py-10">
             {messages.map((m) =>
               m.role === "user" ? (
                 <UserMessage key={m.id} text={m.content} />
@@ -584,10 +628,33 @@ export default function App() {
               )
             )}
           </div>
+        ) : (
+          <Landing
+            input={input}
+            setInput={setInput}
+            onSend={() => send(input)}
+            onPick={send}
+            busy={busy}
+          />
+        )}
+      </div>
+
+      {started && (
+        <div className="relative shrink-0 border-t border-rule-soft bg-paper px-6 py-4">
+          <div className="mx-auto w-full max-w-3xl">
+            <AskBox
+              value={input}
+              onChange={setInput}
+              onSend={() => send(input)}
+              disabled={busy}
+              placeholder="Ask a follow-up…"
+            />
+            <p className="mt-2.5 text-center font-mono text-[10px] text-ink-faint">
+              read-only access · enter to send · shift+enter for a new line
+            </p>
+          </div>
         </div>
       )}
-
-      <InputBar value={input} onChange={setInput} onSend={() => send(input)} disabled={busy} />
     </div>
   );
 }

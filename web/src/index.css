@@ -1,7 +1,78 @@
 @import "tailwindcss";
 
+@import "@fontsource/instrument-serif/400.css";
+@import "@fontsource/instrument-serif/400-italic.css";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
+
+/* Paper, ink and rules — a warm off-white ground with a slate-blue ink, sitting
+   a long way from pure #fff/#000 so nothing on the page glares. */
+@theme {
+  --font-sans: "Inter Variable", system-ui, -apple-system, sans-serif;
+  --font-serif: "Instrument Serif", Georgia, "Times New Roman", serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, monospace;
+
+  --color-paper: #faf8f4;
+  --color-paper-raised: #fffdfa;
+  --color-ink: #2c3d44;
+  --color-ink-soft: #56666d;
+  --color-ink-faint: #8d979b;
+  --color-rule: #e3ded4;
+  --color-rule-soft: #eeeae1;
+}
+
 html,
 body,
 #root {
   height: 100%;
+}
+
+body {
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Graph paper behind the masthead, faded out before it reaches the content. */
+.grid-fade {
+  background-image:
+    linear-gradient(to right, var(--color-rule-soft) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--color-rule-soft) 1px, transparent 1px);
+  background-size: 34px 34px;
+  -webkit-mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.7), transparent);
+  mask-image: linear-gradient(to bottom, rgb(0 0 0 / 0.7), transparent);
+}
+
+@keyframes popIn {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes bounceDot {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.35; }
+  30% { transform: translateY(-3px); opacity: 1; }
+}
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.pop-in { animation: popIn 0.15s ease both; }
+.dot { animation: bounceDot 1.2s infinite ease-in-out; }
+
+.stream-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 15px;
+  margin-left: 2px;
+  vertical-align: -3px;
+  background: var(--color-ink);
+  animation: blink 1s step-start infinite;
+}
+
+textarea::-webkit-scrollbar,
+.msg-scroll::-webkit-scrollbar { width: 7px; }
+.msg-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-rule);
+  border-radius: 999px;
 }
