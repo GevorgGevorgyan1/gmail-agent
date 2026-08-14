@@ -1,12 +1,12 @@
 # Gmail Agent
+> **Status: in development.**
 
 Ask questions about your Gmail(currently) in plain language and get a written answer,
 with links back to the actual threads.
 
-> **Status: in development.**
 ## How it works
 
-A tool-calling loop (`agent.py`) lets the model search your mailbox itself
+A LangChain agent (`agent.py`) lets the model search your mailbox itself
 via Gmail search syntax, judge what came back, and search again if the first
 attempt was too narrow — then answer from the messages it found. `server.py`
 puts a FastAPI front on it; `web/` is the React UI. Access is **read-only**:
@@ -34,7 +34,6 @@ to the server.
 
 ```bash
 python agent.py "did I ever write to arman"   # the agent loop
-python digest.py "unread from this week"      # one-shot: search, then summarize
 python gmail.py "from:stripe.com" 20          # raw fetch and parse
 ```
 
@@ -42,8 +41,10 @@ python gmail.py "from:stripe.com" 20          # raw fetch and parse
 
 | File | Role |
 |---|---|
-| `agent.py` | tool-calling loop — search, judge, answer |
-| `query.py` | natural language → Gmail search query |
+| `agent.py` | the LangChain agent — builds it, runs it, reads the transcript back |
+| `tools.py` | what the model can do: search, read a thread, shape the results |
+| `prompts.py` | the system prompt |
+| `config.py` | model name, limits, budgets, and the `.env` load |
 | `gmail.py` / `clean.py` | batched fetch, HTML stripping, parsing |
 | `sessions.py` | per-conversation history, in process |
 | `server.py` | HTTP API and static hosting |
